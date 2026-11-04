@@ -184,7 +184,7 @@ textarea { width: 100%; min-height: 76px; resize: vertical; border: 1px solid va
   <span class="save" id="save" data-s="idle">Connecting…</span>
   <button class="tbtn" id="btnTeam" type="button">Team progress</button>
   <button class="tbtn" id="btnRubric" type="button">Rubric</button>
-  <button class="tbtn" id="btnExport" type="button">Export</button>
+  <button class="tbtn" id="btnExport" type="button">Export / save</button>
 </header>
 <div class="notice" id="notice" hidden></div>
 
@@ -224,8 +224,11 @@ textarea { width: 100%; min-height: 76px; resize: vertical; border: 1px solid va
 </section></div>
 
 <div class="ov" id="ovExport" hidden><section class="card panel" role="dialog" aria-labelledby="hExp">
-  <h2 id="hExp">Export</h2>
-  <p>My labels as tab-separated rows L001–L100, columns J–P of the Labels sheet (Stance, No-answer type, Justification, three CoT flags, Notes). Click cell J2 in the sheet and paste.</p>
+  <h2 id="hExp">Save and export</h2>
+  <p>Your labels autosave in this browser. Download a file to keep a copy, to send your labels to the group, or to continue on another computer.</p>
+  <div class="row"><button class="tbtn pri" type="button" id="btnDlCsv">Download my labels (CSV)</button><button class="tbtn" type="button" id="btnDlJson">Download backup (JSON)</button></div>
+  <div class="row"><label class="tbtn" for="importFile" style="cursor:pointer">Load a backup file…</label><input type="file" id="importFile" accept=".json,application/json" hidden><span class="hint" id="dlMsg" role="status"></span></div>
+  <p>For the Google Sheet: these are your labels as tab-separated rows L001–L100, columns J–P of the Labels sheet (Stance, No-answer type, Justification, three CoT flags, Notes). Click cell J2 in the sheet and paste.</p>
   <textarea id="expText" readonly></textarea>
   <div class="row"><button class="tbtn" type="button" id="btnCopy">Copy to clipboard</button><span class="hint" id="copyMsg"></span></div>
   <div id="expAll" hidden style="display:flex;flex-direction:column;gap:8px">
@@ -604,8 +607,9 @@ async function startNamed(n) {
   $("who").querySelector("img").remove();
   $("expAll").hidden = false;
   if (!SHEET_API) {
-    restoreLocal(S.uid); setSave("local", "Saved in this browser only");
-    setNotice("Saving to the shared sheet isn't switched on yet, so labels are kept only in this browser for now.");
+    restoreLocal(S.uid); setSave("local", "Saved in this browser");
+    $("btnTeam").hidden = true; $("expAll").hidden = true;
+    setNotice("Your labels save automatically in this browser. When you finish, or to switch computers, click Export and download your labels.");
     return;
   }
   let sent = {};
@@ -717,6 +721,41 @@ $("btnAllCopy").onclick = async () => {
   try { const rows = await allRows(); $("expText").value = rows.map(r => r.map(tsvCell).join("\t")).join("\n"); copy($("expText").value, $("allMsg"), $("expText")); }
   catch (e) { $("allMsg").textContent = "Export didn't finish" + (e && e.code ? ` (${e.code})` : "") + "."; }
 };
+
+/* ---------- files: download my labels, load a backup ---------- */
+async function saveFile(filename, data, type) {
+  if (window.claude && window.claude.use) {
+    const dl = await window.claude.use("downloads"); if (!dl) throw { code: "no_downloads" };
+    return dl.save({ filename, data });
+  }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data], { type })); a.download = filename;
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+const fileBase = () => "human_labels_" + ((NAME.name || "me").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "") || "me");
+const csvCell = v => /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+$("btnDlCsv").onclick = async () => {
+  const rows = [["labeler", "item_id", "mode", "stance", "no_answer_type", "justification", "cot_names_correct", "cot_doubts_stated", "cot_defers", "notes", "complete"]];
+  for (const it of S.items) { const L = S.labels[it.item_id] || {}; rows.push([NAME.name, it.item_id, it.mode, ...FIELDS.map(f => cell(L[f])), missing(it, L).length ? "FALSE" : "TRUE"]); }
+  try { await saveFile(fileBase() + ".csv", rows.map(r => r.map(csvCell).join(",")).join("\n") + "\n", "text/csv"); $("dlMsg").textContent = `Downloaded ${S.items.filter(isDone).length}/100 done.`; }
+  catch (e) { $("dlMsg").textContent = "Download didn't start" + (e && e.code ? ` (${e.code})` : "") + ". Use Copy below instead."; }
+};
+$("btnDlJson").onclick = async () => {
+  const data = JSON.stringify({ labeler: NAME.name, rubric: "v3", updatedAt: S.updatedAt, items: S.labels }, null, 1);
+  try { await saveFile(fileBase() + ".json", data, "application/json"); $("dlMsg").textContent = "Backup downloaded. Load it here on any computer to continue."; }
+  catch (e) { $("dlMsg").textContent = "Download didn't start" + (e && e.code ? ` (${e.code})` : "") + "."; }
+};
+$("importFile").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  try {
+    const j = JSON.parse(await f.text()); const items = j.items || {};
+    let n = 0;
+    for (const it of S.items) { const L = items[it.item_id]; if (!L || typeof L !== "object") continue;
+      const cur = S.labels[it.item_id]; if (!cur || (L.t || 0) >= (cur.t || 0)) { S.labels[it.item_id] = L; n++; } }
+    if (!n) { $("dlMsg").textContent = "Nothing newer in that file."; return; }
+    schedule(); renderForm(); renderChips();
+    $("dlMsg").textContent = `Loaded ${n} labels from ${f.name}.`;
+  } catch { $("dlMsg").textContent = "That file isn't a label backup from this page."; }
+});
 
 /* ---------- boot ---------- */
 function parseItems(text) { const t = text.trim(); return t.startsWith("[") ? JSON.parse(t) : t.split("\n").filter(Boolean).map(l => JSON.parse(l)); }

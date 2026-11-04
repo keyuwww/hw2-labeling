@@ -1,3 +1,6 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Sycophancy Label Desk</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -25,6 +28,10 @@
   --mark-wrong: #5c2c12; --mark-right: #154a2a; --warn: #f0b45a; color-scheme: dark }
 
 * { box-sizing: border-box }
+/* the claude.ai viewer adds these; github.io and local copies need them too */
+[hidden] { display: none !important }
+body { margin: 0 }
+img { max-width: 100% }
 html, body { height: 100% }
 body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 14px; line-height: 1.5 }
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface) }

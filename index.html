@@ -167,7 +167,7 @@ textarea { width: 100%; min-height: 76px; resize: vertical; border: 1px solid va
 .panel code { font-family: var(--font-mono); font-size: 12px; background: var(--sunk); border-radius: 4px; padding: 0 4px }
 .panel a { color: var(--accent) }
 .ghf { display: flex; flex-direction: column; gap: 8px }
-.ghf input[type=password] { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--surface); font-family: var(--font-mono); font-size: 13px }
+.ghf input[type=text] { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--surface); font-family: var(--font-mono); font-size: 13px }
 .rem { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px }
 .tbtn.pri { background: var(--accent); border-color: var(--accent); color: var(--on-accent) }
 .empty { padding: 40px 20px; text-align: center; color: var(--muted) }
@@ -229,26 +229,20 @@ textarea { width: 100%; min-height: 76px; resize: vertical; border: 1px solid va
   <textarea id="expText" readonly></textarea>
   <div class="row"><button class="tbtn" type="button" id="btnCopy">Copy to clipboard</button><span class="hint" id="copyMsg"></span></div>
   <div id="expAll" hidden style="display:flex;flex-direction:column;gap:8px">
-    <p>As an editor you can also export every labeler's labels, one row per labeler per item, for the agreement analysis.</p>
+    <p>You can also export every labeler's labels, one row per labeler per item, for the agreement analysis.</p>
     <div class="row"><button class="tbtn" type="button" id="btnAll">Download all labelers (CSV)</button><button class="tbtn" type="button" id="btnAllCopy">Copy all labelers (TSV)</button><span class="hint" id="allMsg"></span></div>
   </div>
   <div class="row"><button class="tbtn" type="button" data-close>Close</button></div>
 </section></div>
 
-<div class="ov" id="ovGh" hidden><section class="card panel" role="dialog" aria-labelledby="hGh">
-  <h2 id="hGh">Sign in with GitHub</h2>
-  <p>Labels save to the course repo, one file per labeler on the <code>human-labels</code> branch, so anyone who can see the repo can label. Paste a GitHub token that can access <code>harvard-cs2881f26/hw2-li-wang-xu</code>.</p>
-  <ul class="steps">
-    <li>Quickest, if you use the GitHub CLI: run <code>gh auth token</code> in a terminal and paste the output.</li>
-    <li>Or make a <a href="https://github.com/settings/tokens/new?scopes=repo&amp;description=hw2%20labeling" target="_blank" rel="noopener">classic token with the repo scope</a>.</li>
-  </ul>
-  <form id="ghForm" class="ghf">
-    <label class="lbl" for="ghToken">Token</label>
-    <input type="password" id="ghToken" autocomplete="off" spellcheck="false" placeholder="ghp_… or gho_…">
-    <label class="rem" for="ghRemember"><input type="checkbox" id="ghRemember" checked> Remember on this device</label>
-    <div class="row"><button class="tbtn pri" type="submit">Sign in</button><button class="tbtn" type="button" data-close>Not now</button><span class="hint" id="ghErr" role="status"></span></div>
+<div class="ov" id="ovName" hidden><section class="card panel" role="dialog" aria-labelledby="hName">
+  <h2 id="hName">Who's labeling?</h2>
+  <p>Type your name. Your labels are saved under it as you go, so use the same name every time, on any device, to pick up where you left off.</p>
+  <form id="nameForm" class="ghf">
+    <label class="lbl" for="nameInput">Your name</label>
+    <input type="text" id="nameInput" autocomplete="name" spellcheck="false" maxlength="60" placeholder="e.g. Keyu Wang">
+    <div class="row"><button class="tbtn pri" type="submit">Start labeling</button><button class="tbtn" type="button" data-close>Not now</button><span class="hint" id="nameErr" role="status"></span></div>
   </form>
-  <p>The token stays in this browser and is sent only to api.github.com. Without signing in you can read the rubric, but items and saving need GitHub. Reopen this from <b>Sign in with GitHub</b> at the top.</p>
 </section></div>
 
 <div class="ov" id="ovRubric" hidden><section class="card panel rubric" role="dialog" aria-labelledby="hRub">
@@ -578,107 +572,90 @@ async function connectClaude() {
   db.collection("progress").onSnapshot(snap => { progress = snap.docs.map(d => ({ id: d.id, ...d.data() })); if (!$("ovTeam").hidden) renderTeam(); }, () => {});
 }
 
-/* ---------- backend: GitHub (labels committed to a branch of the repo) ---------- */
-const GH = { owner: "harvard-cs2881f26", repo: "hw2-li-wang-xu", branch: "human-labels", dir: "results/human_labels/labels", items: "results/human_labels/sample.jsonl" };
-const b64e = s => { const b = new TextEncoder().encode(s); let bin = ""; for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode(...b.subarray(i, i + 0x8000)); return btoa(bin); };
-const b64d = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/g, "")), c => c.charCodeAt(0)));
-async function gh(path, opts = {}) {
-  const r = await fetch("https://api.github.com" + path, { ...opts, cache: "no-store", headers: { Authorization: "Bearer " + GH.token, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" } });
-  if (!r.ok) {
-    const body = await r.json().catch(() => ({}));
-    const code = r.status === 401 ? "auth" : (r.status === 403 && !/rate limit/i.test(body.message || "")) ? "invalid_argument" : r.status === 404 ? "not_found" : r.status === 409 || r.status === 422 ? "conflict" : "unavailable";
-    throw { code, status: r.status, message: body.message || r.statusText };
-  }
-  return r.json();
+/* ---------- backend: Google Sheet (Apps Script web app in labeling/apps_script.gs) ---------- */
+// Paste the web app URL (ends in /exec) here. Empty = labels stay in this browser.
+const SHEET_API = "";
+const NAME = { name: "", key: "" };
+const nameKey = n => n.trim().toLowerCase().replace(/\s+/g, " ");
+async function api(params, body) {
+  const url = SHEET_API + "?" + new URLSearchParams(params);
+  // A text/plain POST is a "simple" request, so the browser sends it to Apps Script without a CORS preflight.
+  const r = await fetch(body ? SHEET_API : url, body ? { method: "POST", body: JSON.stringify(body) } : { cache: "no-store" });
+  if (!r.ok) throw { code: "unavailable", message: "HTTP " + r.status };
+  const j = await r.json();
+  if (!j.ok) throw { code: "unavailable", message: j.error || "the sheet refused the save" };
+  return j;
 }
-const repoPath = p => `/repos/${GH.owner}/${GH.repo}/contents/${p}`;
-async function ghFile(p, ref) { try { const f = await gh(repoPath(p) + "?ref=" + ref); return { sha: f.sha, text: b64d(f.content) }; } catch (e) { if (e.code === "not_found") return null; throw e; } }
-
-function ghSignInPanel(msg) {
-  $("ghErr").textContent = msg || ""; open("ovGh"); $("ghToken").focus();
+function askName(msg) {
+  $("nameErr").textContent = msg || ""; $("nameInput").value = NAME.name; open("ovName");
 }
-$("ghForm").addEventListener("submit", async e => {
+$("nameForm").addEventListener("submit", e => {
   e.preventDefault();
-  const tok = $("ghToken").value.trim(); if (!tok) return;
-  $("ghErr").textContent = "Checking…";
-  GH.token = tok;
-  try { await ghStart(true); } catch (err) { GH.token = null; $("ghErr").textContent = err.message || "Sign-in didn't work."; }
+  const n = $("nameInput").value.trim().replace(/\s+/g, " ");
+  if (n.length < 2) { $("nameErr").textContent = "Type at least two letters."; return; }
+  if (NAME.name && nameKey(n) !== NAME.key) { store.set("hl-name", n); location.reload(); return; }
+  store.set("hl-name", n); closeAll(); startNamed(n);
 });
-async function ghStart(fromForm) {
-  let me, repo;
-  try { [me, repo] = await Promise.all([gh("/user"), gh(`/repos/${GH.owner}/${GH.repo}`)]); }
-  catch (e) {
-    if (!fromForm) { store.set("hl-gh-token", null); return ghSignInPanel("Your saved token no longer works. Paste a new one."); }
-    throw new Error(e.code === "auth" ? "GitHub didn't accept that token." : e.code === "not_found" ? `That token can't see ${GH.owner}/${GH.repo}. Give it access to this repository.` : "Couldn't reach GitHub: " + e.message);
-  }
-  if (fromForm) store.set("hl-gh-token", $("ghRemember").checked ? GH.token : null);
-  closeAll();
-  GH.login = me.login; S.uid = "gh-" + me.login;
-  const out = document.createElement("button"); out.type = "button"; out.className = "tbtn"; out.textContent = "Sign out";
-  out.onclick = () => { store.set("hl-gh-token", null); location.reload(); };
-  showMe(me.login, me.avatar_url, out);
+async function startNamed(n) {
+  NAME.name = n; NAME.key = nameKey(n); S.uid = "n-" + NAME.key;
+  const change = document.createElement("button"); change.type = "button"; change.className = "tbtn"; change.textContent = "Change name";
+  change.onclick = () => askName("Switching names loads that person's labels.");
+  showMe(n, "", change);
+  $("who").querySelector("img").remove();
   $("expAll").hidden = false;
-  if (!S.items.length) {
-    const f = await ghFile(GH.items, repo.default_branch);
-    S.items = parseItems(f.text); buildChips();
+  if (!SHEET_API) {
+    restoreLocal(S.uid); setSave("local", "Saved in this browser only");
+    setNotice("Saving to the shared sheet isn't switched on yet, so labels are kept only in this browser for now.");
+    return;
   }
-  // Make sure the labels branch exists (created from the default branch the first time anyone saves).
-  try { await gh(`/repos/${GH.owner}/${GH.repo}/git/ref/heads/${GH.branch}`); }
-  catch (e) {
-    if (e.code !== "not_found") throw e;
-    const main = await gh(`/repos/${GH.owner}/${GH.repo}/git/ref/heads/${repo.default_branch}`);
-    if (repo.permissions?.push) await gh(`/repos/${GH.owner}/${GH.repo}/git/refs`, { method: "POST", body: JSON.stringify({ ref: "refs/heads/" + GH.branch, sha: main.object.sha }) });
-  }
-  const myPath = `${GH.dir}/${GH.login}.json`;
-  let sha = null;
-  const cache = {};
-  const readAll = async () => {
-    let list = [];
-    try { list = await gh(repoPath(GH.dir) + "?ref=" + GH.branch); } catch (e) { if (e.code !== "not_found") throw e; }
-    const files = list.filter(f => f.type === "file" && f.name.endsWith(".json"));
-    return Promise.all(files.map(async f => {
-      if (!cache[f.sha]) { const r = await gh(`/repos/${GH.owner}/${GH.repo}/git/blobs/${f.sha}`); cache[f.sha] = JSON.parse(b64d(r.content)); }
-      const login = f.name.slice(0, -5);
-      return { id: login, name: login, avatar: `https://github.com/${encodeURIComponent(login)}.png?size=52`, items: cache[f.sha].items || {} };
-    }));
-  };
+  let sent = {};
+  const sig = L => JSON.stringify(L || {});
   S.be = {
-    delay: 3000, savedText: "Saved to GitHub",
-    readOnlyMsg: `Your GitHub token can read ${GH.owner}/${GH.repo} but not write to it, so labels can't be saved. Make a token with Contents: Read and write.`,
-    async save(body, done) {
-      const put = () => gh(repoPath(myPath), { method: "PUT", body: JSON.stringify({
-        message: `Human labels: ${GH.login} ${done}/${S.items.length}`, branch: GH.branch,
-        content: b64e(JSON.stringify({ labeler: GH.login, ...body }, null, 1) + "\n"), ...(sha ? { sha } : {}) }) });
-      let res;
-      try { res = await put(); }
-      catch (e) { if (e.code !== "conflict") throw e; const cur = await ghFile(myPath, GH.branch); sha = cur && cur.sha; res = await put(); }
-      sha = res.content.sha;
+    delay: 1500, savedText: "Saved to the sheet", readOnlyMsg: "",
+    async save(body) {
+      const items = {};
+      for (const it of S.items) {
+        const L = body.items[it.item_id];
+        if (sig(L) !== sent[it.item_id] && (L || sent[it.item_id])) items[it.item_id] = { ...(L || {}), mode: it.mode, complete: missing(it, L).length === 0 };
+      }
+      if (!Object.keys(items).length) return;
+      await api(null, { name: NAME.name, key: NAME.key, updatedAt: body.updatedAt, items });
+      for (const iid in items) sent[iid] = sig(body.items[iid]);
     },
     async team() {
-      return (await readAll()).map(r => ({ id: r.id, name: r.name, avatar: r.avatar, done: S.items.filter(it => missing(it, r.items[it.item_id]).length === 0).length, total: S.items.length }));
+      const j = await api({ action: "progress" });
+      return j.labelers.map(l => ({ id: l.key, name: l.name, done: l.done, total: S.items.length, isMe: l.key === NAME.key }));
     },
-    all: readAll,
+    async all() {
+      const j = await api({ action: "all" }); const by = {};
+      for (const r of j.rows) { (by[r.key] = by[r.key] || { id: r.key, name: r.name, items: {} }).items[r.item_id] = r.label; }
+      return Object.values(by);
+    },
     async download(filename, data) {
       const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data], { type: "text/csv" })); a.download = filename; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     },
   };
-  if (!repo.permissions?.push) { S.readOnly = true; setNotice(S.be.readOnlyMsg); }
-  const mine = await ghFile(myPath, GH.branch);
-  sha = mine && mine.sha;
-  adopt(mine ? JSON.parse(mine.text) : null);
-  if (S.readOnly) { renderForm(); setSave("error", "Read-only"); }
+  setSave("pending", "Loading your labels…");
+  try {
+    const j = await api({ action: "mine", key: NAME.key });
+    for (const iid in j.items) { const L = { ...j.items[iid] }; S.items.forEach(it => { if (it.item_id === iid && !cotNeeded(it)) for (const [k] of COT) delete L[k]; }); j.items[iid] = L; }
+    sent = Object.fromEntries(Object.entries(j.items).map(([k, v]) => [k, sig(v)]));
+    adopt(Object.keys(j.items).length ? j : null);
+  } catch (e) {
+    S.be = null; restoreLocal(S.uid); setSave("error", "Sheet unreachable");
+    setNotice("Couldn't reach the shared sheet (" + (e.message || e.code) + "). Labels are kept in this browser; reload later to sync.");
+  }
 }
 
 function connect() {
   if (window.claude && window.claude.use) return connectClaude();
-  GH.token = store.get("hl-gh-token");
-  const b = document.createElement("button"); b.type = "button"; b.className = "tbtn pri"; b.textContent = "Sign in with GitHub";
-  b.onclick = () => ghSignInPanel(); $("who").append(b);
-  if (GH.token) return ghStart(false).catch(e => ghSignInPanel(e.message));
-  restoreLocal("local");
-  setSave("local", "Not signed in");
-  ghSignInPanel();
+  const n = store.get("hl-name");
+  if (n) return startNamed(n);
+  const b = document.createElement("button"); b.type = "button"; b.className = "tbtn pri"; b.textContent = "Enter your name";
+  b.onclick = () => askName(); $("who").append(b);
+  setSave("local", "No name yet");
+  askName();
 }
 function restoreLocal(key) {
   const local = store.get("hl-labels-" + key);
@@ -702,8 +679,8 @@ async function renderTeam() {
   $("team").innerHTML = "";
   for (const r of rows) {
     const row = document.createElement("div"); row.className = "trow";
-    const img = document.createElement("img"); img.alt = ""; if (r.avatar) img.src = r.avatar;
-    const n = document.createElement("span"); n.className = "n"; n.textContent = r.name + (r.id === S.uid || "gh-" + r.id === S.uid ? " (you)" : "");
+    const img = document.createElement("img"); img.alt = ""; if (r.avatar) img.src = r.avatar; else img.hidden = true;
+    const n = document.createElement("span"); n.className = "n"; n.textContent = r.name + ((r.isMe ?? r.id === S.uid) ? " (you)" : "");
     const bar = document.createElement("div"); bar.className = "bar"; const i = document.createElement("i"); i.className = "off"; i.style.width = Math.round(100 * r.done / r.total) + "%"; bar.append(i);
     const num = document.createElement("span"); num.className = "num"; num.textContent = `${r.done}/${r.total}`;
     row.append(img, n, bar, num); $("team").append(row);
@@ -749,9 +726,8 @@ async function boot() {
   for (const src of ["items.json", "../results/human_labels/sample.jsonl"]) {
     try { const r = await fetch(src); if (r.ok) { S.items = parseItems(await r.text()); break; } } catch {}
   }
-  if (S.items.length) { buildChips(); go(0); }
-  else if (window.claude) { $("item").innerHTML = `<div class="empty">The items didn't load. Reload the page to try again.</div>`; return; }
-  else $("item").innerHTML = `<div class="empty">Sign in with GitHub to load the 100 items from the repo.</div>`;
+  if (!S.items.length) { $("item").innerHTML = `<div class="empty">The items didn't load. Reload the page to try again.</div>`; return; }
+  buildChips(); go(0);
   connect();
 }
 boot();

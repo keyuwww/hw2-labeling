@@ -2,6 +2,4 @@
 
 https://keyuwww.github.io/hw2-labeling/
 
-This repo holds only the page code. The items and the labels live in the private repo `harvard-cs2881f26/hw2-li-wang-xu`: the page loads them through the GitHub API after you sign in with a token that can access that repo, so without access you see only the sign-in screen.
-
-The source is `labeling/index.html` in the private repo. To update the site, copy that file here as `index.html` and push.
+Human labeling of 100 Qwen3-8B responses (val split) with rubric v3. Labels save under the labeler's name to a Google Sheet. The source and the Sheet backend live in the private course repo (`labeling/`).

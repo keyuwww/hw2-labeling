@@ -239,9 +239,9 @@ textarea { width: 100%; min-height: 76px; resize: vertical; border: 1px solid va
     <label class="lbl" for="ghToken">Token</label>
     <input type="password" id="ghToken" autocomplete="off" spellcheck="false" placeholder="ghp_… or gho_…">
     <label class="rem" for="ghRemember"><input type="checkbox" id="ghRemember" checked> Remember on this device</label>
-    <div class="row"><button class="tbtn pri" type="submit">Sign in</button><span class="hint" id="ghErr" role="status"></span></div>
+    <div class="row"><button class="tbtn pri" type="submit">Sign in</button><button class="tbtn" type="button" data-close>Not now</button><span class="hint" id="ghErr" role="status"></span></div>
   </form>
-  <p>The token stays in this browser and is sent only to api.github.com.</p>
+  <p>The token stays in this browser and is sent only to api.github.com. Without signing in you can read the rubric, but items and saving need GitHub. Reopen this from <b>Sign in with GitHub</b> at the top.</p>
 </section></div>
 
 <div class="ov" id="ovRubric" hidden><section class="card panel rubric" role="dialog" aria-labelledby="hRub">
@@ -461,7 +461,7 @@ document.addEventListener("keydown", e => {
       const it = S.items[S.idx]; const opts = hasStated(it) ? STANCE_STATED : STANCE_NEUTRAL; const o = opts[+e.key - 1];
       if (o && !S.readOnly) { edit(L => { L.stance = o[0]; }); renderForm(); renderChips(); }
     }
-  } else if (e.key === "Escape" && $("ovGh").hidden) closeAll();
+  } else if (e.key === "Escape") closeAll();
 });
 
 /* ---------- saving ---------- */
@@ -666,11 +666,11 @@ async function ghStart(fromForm) {
 function connect() {
   if (window.claude && window.claude.use) return connectClaude();
   GH.token = store.get("hl-gh-token");
+  const b = document.createElement("button"); b.type = "button"; b.className = "tbtn pri"; b.textContent = "Sign in with GitHub";
+  b.onclick = () => ghSignInPanel(); $("who").append(b);
   if (GH.token) return ghStart(false).catch(e => ghSignInPanel(e.message));
   restoreLocal("local");
   setSave("local", "Not signed in");
-  const b = document.createElement("button"); b.type = "button"; b.className = "tbtn pri"; b.textContent = "Sign in with GitHub";
-  b.onclick = () => ghSignInPanel(); $("who").append(b);
   ghSignInPanel();
 }
 function restoreLocal(key) {
@@ -684,7 +684,7 @@ function restoreLocal(key) {
 /* ---------- panels ---------- */
 function open(id) { closeAll(); $(id).hidden = false; const b = $(id).querySelector("input:not([type=checkbox]), button"); if (b) b.focus(); }
 function closeAll() { for (const o of document.querySelectorAll(".ov")) o.hidden = true; }
-for (const o of document.querySelectorAll(".ov")) o.addEventListener("click", e => { if ((e.target === o && o.id !== "ovGh") || e.target.closest("[data-close]")) closeAll(); });
+for (const o of document.querySelectorAll(".ov")) o.addEventListener("click", e => { if (e.target === o || e.target.closest("[data-close]")) closeAll(); });
 $("btnRubric").onclick = () => open("ovRubric");
 $("btnTeam").onclick = () => { if (!S.be) return; open("ovTeam"); renderTeam(); };
 async function renderTeam() {
